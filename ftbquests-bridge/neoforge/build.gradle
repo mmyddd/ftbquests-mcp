@@ -1,5 +1,5 @@
 plugins {
-    id "io.github.goooler.shadow" version "8.1.7"
+    id "com.gradleup.shadow" version "9.5.0"
 }
 
 architectury {
@@ -31,8 +31,9 @@ dependencies {
 
 processResources {
     inputs.property "version", project.version
+    inputs.property "ftbQuestsMinVersion", rootProject.ftb_quests_min_version
     filesMatching("META-INF/neoforge.mods.toml") {
-        expand "version": project.version
+        expand "version": project.version, "ftbQuestsMinVersion": rootProject.ftb_quests_min_version
     }
 }
 
@@ -42,7 +43,7 @@ shadowJar {
 }
 
 remapJar {
-    input.set shadowJar.archiveFile
+    inputFile.set shadowJar.archiveFile
     archiveClassifier = null
     dependsOn shadowJar
 }

@@ -24,7 +24,7 @@ import net.minecraft.resources.ResourceLocation;
  * (group → chapter → quest, none added to the live file) and calling {@code writeData}.
  *
  * <p>The richer per-field UI metadata would come from {@code fillConfigGroup}, but that method is
- * {@code @Environment(EnvType.CLIENT)} on ftb-quests 2101.1.27 and is STRIPPED on a dedicated
+ * {@code @Environment(EnvType.CLIENT)} on ftb-quests 2101.x and is STRIPPED on a dedicated
  * server — calling it throws {@code NoSuchMethodError}. So {@code fields} is always empty here and
  * the companion (Plan 2) supplies curated field docs. {@code defaults} is the server-obtainable
  * portion and is enough to learn a type's serialized field names + baseline values.

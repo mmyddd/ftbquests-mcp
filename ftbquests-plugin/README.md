@@ -10,7 +10,7 @@ This plugin is the companion to the **`ftbquests-bridge`** mod (a loopback HTTP+
 
 ## Requirements
 
-- A Minecraft **1.21.1** server (NeoForge or Fabric) running **FTB Quests** + **FTB Library** + **Architectury API** and the **`ftbquests-bridge`** mod.
+- A Minecraft **1.21.1** server (NeoForge or Fabric) running **FTB Quests 2101.1.31+** + **FTB Library** + **Architectury API** and the **`ftbquests-bridge`** mod.
 - **Node 18+** on the machine where Claude Code runs.
 
 ## Setup

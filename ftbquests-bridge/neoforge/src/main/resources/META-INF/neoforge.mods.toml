@@ -28,3 +28,10 @@ type = "required"
 versionRange = "[13.0,)"
 ordering = "AFTER"
 side = "BOTH"
+
+[[dependencies.ftbqbridge]]
+modId = "ftbquests"
+type = "required"
+versionRange = "[${ftbQuestsMinVersion},)"
+ordering = "AFTER"
+side = "BOTH"

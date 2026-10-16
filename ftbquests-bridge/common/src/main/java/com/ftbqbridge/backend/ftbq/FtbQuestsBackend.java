@@ -10,7 +10,9 @@ import com.google.gson.JsonObject;
 import dev.architectury.platform.Platform;
 import dev.ftb.mods.ftblibrary.util.NetworkHelper;
 import dev.ftb.mods.ftbquests.net.CreateObjectResponseMessage;
+import dev.ftb.mods.ftbquests.net.DeleteObjectResponseMessage;
 import dev.ftb.mods.ftbquests.net.EditObjectResponseMessage;
+import dev.ftb.mods.ftbquests.net.SyncTranslationMessageToClient;
 import dev.ftb.mods.ftbquests.quest.Chapter;
 import dev.ftb.mods.ftbquests.quest.ChapterGroup;
 import dev.ftb.mods.ftbquests.quest.Quest;
@@ -19,9 +21,11 @@ import dev.ftb.mods.ftbquests.quest.QuestObjectBase;
 import dev.ftb.mods.ftbquests.quest.QuestObjectType;
 import dev.ftb.mods.ftbquests.quest.ServerQuestFile;
 import dev.ftb.mods.ftbquests.quest.loot.RewardTable;
+import dev.ftb.mods.ftbquests.quest.translation.TranslationKey;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
@@ -30,7 +34,8 @@ import java.util.Locale;
  * {@link ServerTaskExecutor}. This task implements the read side; mutating/registry/schema methods
  * are filled in by Tasks 10-12.
  *
- * <p>API verified against ftb-quests 2101.1.27: instance is {@code ServerQuestFile.INSTANCE};
+ * <p>API verified against ftb-quests 2101.1.31–2101.1.36 (issue #15; the 2101.1.27 API this was first
+ * written for is gone): instance is {@code ServerQuestFile.INSTANCE};
  * {@code ChapterGroup.getChapters()}, {@code Chapter.getQuests()}, {@code Quest.getX()/getY()/getShape()}
  * are getters (the underlying fields are private).
  */
@@ -70,7 +75,8 @@ public final class FtbQuestsBackend implements QuestBackend {
                     JsonObject cj = new JsonObject();
                     cj.addProperty("id", QuestSerializer.hex(c.id));
                     cj.addProperty("title", c.getRawTitle());
-                    cj.addProperty("filename", c.getFilename());
+                    // getFilename() is private since 2101.1.31; getPath() is chapters/<filename>.snbt.
+                    cj.addProperty("filename", c.getPath().map(QuestTree::chapterFilename).orElse(""));
                     cj.addProperty("questCount", c.getQuests().size());
                     chapters.add(cj);
                 }
@@ -144,7 +150,7 @@ public final class FtbQuestsBackend implements QuestBackend {
 
     // ---- Task 12: create / edit / delete / dependency / save (NBT-based, live broadcast) ----
     //
-    // Title text is NOT part of writeData/readData NBT on ftb-quests 2101.1.27 — it lives in the
+    // Title text is NOT part of writeData/readData NBT on ftb-quests 2101.x — it lives in the
     // server-side TranslationManager, written via QuestObjectBase.setRawTitle (issue #12). The
     // translation fields are split out of `properties` (TranslationFields) and applied separately;
     // subtitle/description are not wired yet and are surfaced as response warnings rather than
@@ -178,9 +184,14 @@ public final class FtbQuestsBackend implements QuestBackend {
             TranslationFields text = TranslationFields.from(properties);
             o.readData(QuestSerializer.jsonToNbt(text.remaining), f.holderLookup());
             if (text.title != null) o.setRawTitle(text.title);
+            // onCreated() registers the object in the file's id map and links it into its parent (the
+            // old public refreshIDMap() rebuild is protected since 2101.1.28).
             o.onCreated();
-            f.refreshIDMap(); f.clearCachedData(); f.markDirty();
-            NetworkHelper.sendToAll(f.server, CreateObjectResponseMessage.create(o, extraNbt));
+            f.clearCachedData(); f.markDirty();
+            // The creation record carries the title as an initial translation (makeExtraCreationData),
+            // so clients receive the object and its title in one packet. Same server-side create path
+            // as FTB's own commands, which also broadcast to every player rather than editors only.
+            NetworkHelper.sendToAll(f.server, CreateObjectResponseMessage.create(o));
             persist(f);
 
             JsonObject result = QuestSerializer.objectFull(o, f.holderLookup());
@@ -211,6 +222,12 @@ public final class FtbQuestsBackend implements QuestBackend {
             o.editedFromGUIOnServer();
             f.clearCachedData(); f.markDirty();
             NetworkHelper.sendToAll(f.server, new EditObjectResponseMessage(o));
+            // The edit record only carries NBT; push the new title to clients the way FTB's own
+            // UpdateTranslation edit does, so it shows up live rather than on the next login.
+            if (text.title != null) {
+                NetworkHelper.sendToAll(f.server,
+                        SyncTranslationMessageToClient.create(o, f.getLocale(), TranslationKey.TITLE, text.title));
+            }
             persist(f);
             JsonObject result = QuestSerializer.objectFull(o, f.holderLookup());
             attachWarnings(result, unsupportedWarnings(text));
@@ -224,21 +241,26 @@ public final class FtbQuestsBackend implements QuestBackend {
             long oid = QuestSerializer.parseHex(id);
             QuestObjectBase obj = f.getBase(oid);
             if (obj == null) throw ApiException.notFound(id);
-            // FTB's ChapterGroup.deleteSelf() does NOT delete the group's chapters — it reparents
-            // them into the default group, and removeAllTranslations() on the group wipes their
-            // titles along the way. To make group deletion cascade like every other container,
-            // delete the chapters ourselves first (each cascades to its quests/tasks/rewards), then
-            // delete the now-empty group. The default group is never user-deletable, so leave it to
-            // FTB. Snapshot the list first: deleting a chapter mutates the group's live chapter list.
-            if (obj instanceof ChapterGroup group && !group.isDefaultGroup()) {
-                for (Chapter chapter : List.copyOf(group.getChapters())) {
-                    f.deleteObject(chapter.id);
-                }
+            if (obj == f) throw ApiException.badRequest("the quest file itself cannot be deleted");
+            if (obj instanceof ChapterGroup group && group.isDefaultGroup()) {
+                throw ApiException.badRequest("the default chapter group cannot be deleted");
             }
-            f.deleteObject(oid); // removes translations, deletes children/self, refreshes, markDirty, self-broadcasts
+            // Delete the whole subtree, descendants first — the same id list FTB's own GUI delete
+            // builds. ServerQuestFile.deleteObjects (2101.1.31+, replacing deleteObject(long)) only
+            // removes the translations and on-disk files of the ids it's handed, and no longer
+            // broadcasts; listing a group's chapters explicitly is what removes their .snbt files, so
+            // a deleted group's chapters can't reappear on the next restart.
+            List<Long> ids = QuestTree.childrenFirst(obj, FtbQuestsBackend::children).stream()
+                    .map(o -> o.id).toList();
+            if (!f.deleteObjects(ids)) throw ApiException.internal("FTB Quests refused to delete " + id);
+            NetworkHelper.sendToAll(f.server, new DeleteObjectResponseMessage(ids));
             persist(f);
             return null;
         });
+    }
+
+    private static Collection<? extends QuestObjectBase> children(QuestObjectBase o) {
+        return o instanceof QuestObject qo ? qo.getChildren() : List.of();
     }
 
     @Override public JsonObject setDependency(String questId, String dependsOnId, boolean add) {
