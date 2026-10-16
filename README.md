@@ -9,7 +9,7 @@ Edits are applied through the server's own quest APIs and broadcast to connected
 
 ## Requirements
 
-- A Minecraft **1.21.1** server (**NeoForge** or **Fabric**) running **FTB Quests** + **FTB Library** + **Architectury API**.
+- A Minecraft **1.21.1** server (**NeoForge** or **Fabric**) running **FTB Quests 2101.1.31 or newer** + **FTB Library** + **Architectury API**. (FTB Quests 2101.1.30 and older have an incompatible API; the bridge declares the dependency, so the loader refuses to start rather than failing at runtime.)
 - **Node 18+** on the machine where Claude Code runs.
 
 ## Install
