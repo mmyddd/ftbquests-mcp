@@ -47,12 +47,14 @@ A quest's prerequisites are stored as a list of hex ids under the `dependencies`
 
 ## Titles & descriptions
 
-On FTB Quests 2101.x, title/subtitle/description **text is not stored in the object's serialized data** (`writeData`/`readData` NBT, which holds only icon, tags, and type-specific config). It lives in FTB's **TranslationManager** (server-side lang files), keyed by object id.
+This differs per FTB Quests line — check `ftbq_health` → `ftbQuestsVersion` first.
 
-What this means through the bridge today:
+**FTB Quests 2001.x (Minecraft 1.20.1, bridge `-forge` 1.2.x).** Text is ordinary object NBT: `title` is a string, `subtitle` a string, `description` a list of strings — all inside the object's own `writeData`/`readData` payload. So `title`, `subtitle`, and `description` all round-trip through `properties` on `ftbq_create_object` / `ftbq_edit_object`, and `ftbq_get_object` reads them back from the same place. No warnings, no separate lang file.
+
+**FTB Quests 2101.x (Minecraft 1.21.1, bridge 1.1.x).** Title/subtitle/description **text is not stored in the object's serialized data** (which holds only icon, tags, and type-specific config). It lives in FTB's **TranslationManager** (server-side lang files), keyed by object id:
 
 - **Reads work.** `ftbq_get_quest_map` / `ftbq_get_object` return the current title (the server-safe raw title).
-- **Title writes work.** Passing `title` in `properties` on `ftbq_create_object` / `ftbq_edit_object` persists — the bridge routes it through the TranslationManager via `setRawTitle`. The create/edit response echoes the stored `title`.
-- **`subtitle`/`description` writes are not wired yet.** Passing them is **not silently dropped**: the create/edit response includes a `warnings` array noting they were ignored. Set them in-game for now.
+- **Title writes work.** Passing `title` in `properties` persists — the bridge routes it through the TranslationManager via `setRawTitle`. The create/edit response echoes the stored `title`.
+- **`subtitle`/`description` writes are not wired.** Passing them is **not silently dropped**: the create/edit response includes a `warnings` array noting they were ignored. Set them in-game.
 
 Always **read back with `ftbq_get_object`** to confirm what actually landed, and check the response for a `warnings` array.

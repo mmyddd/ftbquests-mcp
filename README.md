@@ -9,15 +9,20 @@ Edits are applied through the server's own quest APIs and broadcast to connected
 
 ## Requirements
 
-- A Minecraft **1.21.1** server (**NeoForge** or **Fabric**) running **FTB Quests 2101.1.31 or newer** + **FTB Library** + **Architectury API**. (FTB Quests 2101.1.30 and older have an incompatible API; the bridge declares the dependency, so the loader refuses to start rather than failing at runtime.)
-- **Node 18+** on the machine where Claude Code runs.
+The bridge ships one source tree per Minecraft line; pick the one matching your server.
+
+| Server | Bridge jar | FTB Quests | Loader deps |
+|---|---|---|---|
+| **1.20.1 Forge** | `ftbquests-bridge-forge-1.2.0.jar` | **2001.4.11+** (2001.x line) | + FTB Library, FTB Teams, Architectury API |
+| **1.21.1 NeoForge / Fabric** | `ftbquests-bridge-neoforge-1.1.0.jar` / `-fabric-1.1.0.jar` | **2101.1.31+** (2101.x line) | + FTB Library, Architectury API |
+
+Each jar declares its FTB Quests version range in its mod metadata, so the loader refuses to start rather than failing at runtime when the installed FTB Quests is too old.
+
+You also need **Node 18+** on the machine where Claude Code runs.
 
 ## Install
 
-**1. Install the bridge mod.** Download the jar for your loader from the [latest release](https://github.com/west3436/ftbquests-mcp/releases/latest) and drop it into the server's `mods/` folder (alongside FTB Quests, FTB Library, and Architectury API), then start the server once:
-
-- Fabric → `ftbquests-bridge-fabric-1.1.0.jar`
-- NeoForge → `ftbquests-bridge-neoforge-1.1.0.jar`
+**1. Install the bridge mod.** Download the jar for your loader from the [latest release](https://github.com/west3436/ftbquests-mcp/releases/latest) and drop it into the server's `mods/` folder (alongside FTB Quests, FTB Library, and — on 1.20.1 — FTB Teams, plus Architectury API), then start the server once:
 
 **2. Install the Claude Code plugin.** In Claude Code:
 
